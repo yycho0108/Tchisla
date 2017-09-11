@@ -12,6 +12,7 @@ For more information/help:
 
 Non-configurable Parameters:
     max_v (for v_filter)
+    check_int (for v_filter)
 
 Note that the program may not find the optimum solution.
 It would terminate when any solution is found such that c<=max_c.
@@ -34,13 +35,16 @@ import warnings
 import operator
 import time
 
-def v_filter(v, max_v=1e100):
+def v_filter(v, max_v=1e10):
     """ Filter Values. """
     if v is None:
         return False
     try:
-        # checking int-ness ...
-        for i in range(1,10):
+        if v<0:
+            v=-v
+        #checking int-ness ...
+        #if check_int:
+        for i in range(1,5):
             k = v**i
             if k == int(k):
                 break
@@ -83,7 +87,10 @@ def tch_iter(args):
     """Iterate once for a group of candidate values"""
     # unpack arguments ...
     y,lhs,rhs,v2c,v2o,ufs,bfs,v_filter,max_c,max_u=args
+    n = len(lhs)
     for v_l in lhs:
+        #if i_vl and (i_vl % 100 == 0):
+        #    print '%d/%d' % (i_vl,n)
         c_l = v2c[v_l]
         for v_r in rhs:
             c = c_l + v2c[v_r]
@@ -161,11 +168,19 @@ def tchisla(
             # use processes
             res = Pool(num_workers).map(
                     tch_iter,
-                    [[y,lhs,rhs,v2c,v2o,ufs,bfs,v_filter,max_c,max_u] for lhs in lhs_s]
+                    ((y,lhs,rhs,v2c,v2o,ufs,bfs,v_filter,max_c,max_u) for lhs in lhs_s)
                     )
             # Grooming
+
+            #ks = reduce(lambda a,b:a+b, [r.keys() for r,_ in res], [])
+            #ks = sorted(np.unique(ks))
+            #print ks
+            #print np.sum([len(r.keys()) for r,_ in res])
+
             for _v2c, _v2o in res:
                 for v in _v2c:
+                    if not v_filter(v):
+                        continue
                     if v not in v2c:
                         v2c[v] = _v2c[v]
                         v2o[v] = _v2o[v]
@@ -174,12 +189,12 @@ def tchisla(
                             v2c[v] = _v2c[v]
                             v2o[v] = _v2o[v]
         else:
-            # use threads
+            # use threads -- v2c is directly modified
             threads = [Thread(target=tch_iter, args=((y,lhs,rhs,v2c,v2o,ufs,bfs,v_filter,max_c,max_u),)) for lhs in lhs_s]
             for t in threads:
                 t.daemon=True
                 t.start()
-            [t.join() for t in threads]
+            res = [t.join() for t in threads]
 
         if y in v2c:
             break
